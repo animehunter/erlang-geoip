@@ -1,0 +1,50 @@
+How to build the driver:
+Open up VC command prompt
+type in makevc.bat
+
+Makefiles for other platforms are welcomed :)
+
+download latest geoip (GeoIP.dat) country database at http://www.maxmind.com/app/geolitecountry
+
+%%
+%% Usage:
+%%
+%% > Geoip = geoip:new("GeoIP.dat").
+%% #Port<0.2755>
+%%
+%% > geoip:get_country_by_ip(Geoip, "24.24.24.24").
+%% <<"United States">>
+%%
+%% > geoip:get_country_by_ip(Geoip, <<"80.24.24.80">>).
+%% <<"Spain">>
+%%
+
+%%
+%% Erlang benchmark
+%%
+%% > geoip:benchmark().
+%% (Slow) Result for "? GEOIP_STANDARD": (2578 ms) (overhead: 61 ms) (C-only: 2516 ms) x100000
+%% (Slow) Result for "? GEOIP_CHECK_CACHE": (2390 ms) (overhead: 30 ms) (C-only: 2360 ms) x100000
+%% (Fast) Result for "? GEOIP_MEMORY_CACHE": (1188 ms) (overhead: 390 ms) (C-only: 797 ms) x1000000
+%% (Fast) Result for "? GEOIP_MEMORY_CACHE bor ? GEOIP_CHECK_CACHE": (1203 ms) (overhead: 390 ms) (C-only: 812 ms) x1000000
+%%
+
+%%
+%% C Benchmark
+%%
+%% >benchmark.exe
+%%
+%% GeoIP Country
+%% 120000 lookups made in 2.769962 seconds
+%%
+%% GeoIP Country with GEOIP_CHECK_CACHE
+%% 120000 lookups made in 2.684795 seconds
+%%
+%% GeoIP Country with GEOIP_MEMORY_CACHE
+%% 1200000 lookups made in 0.409928 seconds
+%%
+%% GeoIP Country with GEOIP_MEMORY_CACHE and GEOIP_CHECK_CACHE
+%% 1200000 lookups made in 0.414053 seconds
+%%
+
+
