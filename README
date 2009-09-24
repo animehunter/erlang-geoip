@@ -4,7 +4,11 @@ type in makevc.bat
 
 Makefiles for other platforms are welcomed :)
 
-download latest geoip (GeoIP.dat) country database at http://www.maxmind.com/app/geolitecountry
+download latest geoip (GeoIP.dat) country database from http://www.maxmind.com/app/geolitecountry
+
+This driver offers high performance for ip to country lookup in Erlang.
+
+Currently it's able to do ~1,200,000 (1.2 million) lookups per second on an AMD 2ghz cpu.
 
 %%
 %% Basic Usage:
