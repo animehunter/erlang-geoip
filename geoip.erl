@@ -121,7 +121,7 @@ new(Name) ->
 	new(Name, ?GEOIP_MEMORY_CACHE).
 	
 new(Name, Type) -> 
-	erl_ddll:load(?DRIVER_LOCATION, ?MODULE),
+	ok = erl_ddll:load(?DRIVER_LOCATION, ?MODULE),
 	Port = open_port({spawn, ?MODULE},[binary]),
 	[] = open(Port, Name, Type),
 	Port.
