@@ -1,27 +1,58 @@
 -module(geoip).
 
 %%
-%% Usage:
+%% Basic Usage:
 %%
 %% > Geoip = geoip:new("GeoIP.dat").
 %% #Port<0.2755>
 %%
 %% > geoip:get_country_by_ip(Geoip, "24.24.24.24").
-%% <<"United States">>
+%% "United States"
 %%
 %% > geoip:get_country_by_ip(Geoip, <<"80.24.24.80">>).
-%% <<"Spain">>
+%% "Spain"
+%%
+%% > geoip:delete(Geoip).
+%% ok
+%%
+
+%%
+%% Advanced usage:
+%%
+%% > Geoip = geoip:new("GeoIP.dat").
+%% #Port<0.2755>
+%%
+%% > geoip:use_binary(Geoip).
+%% []
+%%
+%% > geoip:get_country_by_ip(Geoip, "24.24.24.24").
+%% <<"United States">>
+%%
+%% > geoip:get_country_by_ip(Geoip, "invalidip").
+%% []
+%%
+%% > geoip:use_string(Geoip).                      
+%% []
+%%
+%% > geoip:get_country_by_ip(Geoip, "24.24.24.24").
+%% "United States"
+%%
+%% > geoip:get_country_by_ip(Geoip, "invalidip").
+%% []
+%%
+%% > geoip:delete(Geoip).
+%% ok
 %%
 
 %%
 %% Erlang benchmark
 %%
 %% > geoip:benchmark().
-%% (Slow) Result for "? GEOIP_STANDARD": (2578 ms) (overhead: 61 ms) (C-only: 2516 ms) x100000
-%% (Slow) Result for "? GEOIP_CHECK_CACHE": (2390 ms) (overhead: 30 ms) (C-only: 2360 ms) x100000
-%% (Fast) Result for "? GEOIP_MEMORY_CACHE": (1188 ms) (overhead: 390 ms) (C-only: 797 ms) x1000000
-%% (Fast) Result for "? GEOIP_MEMORY_CACHE bor ? GEOIP_CHECK_CACHE": (1203 ms) (overhead: 390 ms) (C-only: 812 ms) x1000000
-%%
+%% 100000 lookups for "? GEOIP_STANDARD": (2556 ms) 
+%% 100000 lookups for "? GEOIP_CHECK_CACHE": (2435 ms) 
+%% 1000000 lookups for "? GEOIP_MEMORY_CACHE": (890 ms) 
+%% 1000000 lookups for "? GEOIP_MEMORY_CACHE bor ? GEOIP_CHECK_CACHE": (903 ms) 
+%% 
 
 %%
 %% C Benchmark
@@ -41,15 +72,24 @@
 %% 1200000 lookups made in 0.414053 seconds
 %%
 
+%% new/delete functions
 -export([new/1, new/2, delete/1]).
+
+%% options
+-export([use_string/1,use_binary/1]).
+
+%% public API
 -export([get_country_by_ip/2]).
 
--export([test/0, benchmark/0, 
+-export([benchmark/0, 
 		 benchmark/1, benchmark_overhead/1]).
 		
 %% Port commands
 -define(EVENT_OPEN, 0).
--define(EVENT_COUNTRY_BY_IP, 1).
+-define(EVENT_USE_BINARY, 1).
+-define(EVENT_USE_STRING, 2).
+-define(EVENT_COUNTRY_BY_IP, 3).
+
 
 %% Geoip flags
 -define(GEOIP_STANDARD, 0).
@@ -58,75 +98,115 @@
 %% -define(GEOIP_INDEX_CACHE, 4). %% does not work with geoip.dat
 %% -define(GEOIP_MMAP_CACHE, 8). mmap doesnt work on windows!
 
+%%
+%% Settings
+%%
+-define(DRIVER_LOCATION,".").
+%-define(DRIVER_LOCATION, (code:priv_dir(ee_server))).
+%-define(GEOIP_DATABASE, (code:priv_dir(ee_server) ++ "/" ++ "GeoIP.dat")).
+-define(GEOIP_DATABASE, "GeoIP.dat").
+%%
+%% Include files
+%%
+-include_lib("eunit/include/eunit.hrl").
 
 %%
 %% Public API
 %%
 
 %% inline this
--define(call(Port, Cmd),
-begin
-	port_command(Port, Cmd),
-	receive
-		{Port, {data, Bin}} -> 
-			%% io:format("Got: ~p~n",[(Bin)]), 
-			Bin
-		after 0 ->
-			<<>>
-	end
-end).
+-define(call(Port, Cmd, Data), port_control(Port, Cmd, Data)).
 
 new(Name) ->
 	new(Name, ?GEOIP_MEMORY_CACHE).
 	
 new(Name, Type) -> 
-	erl_ddll:load(".", ?MODULE),
+	erl_ddll:load(?DRIVER_LOCATION, ?MODULE),
 	Port = open_port({spawn, ?MODULE},[binary]),
-	open(Port, Name, Type),
+	[] = open(Port, Name, Type),
 	Port.
 
 delete(Port) -> 
 	port_close(Port),
 	erl_ddll:unload(?MODULE).
-	
-open(Port, Name, Type) ->	
-	?call(Port,[?EVENT_OPEN, Type, Name, 0]).
 
+open(Port, Name, Type) when is_integer(Type),is_binary(Name) ->	
+	?call(Port, ?EVENT_OPEN, <<Type, Name/binary, 0>>);
+open(Port, Name, Type) when is_integer(Type) ->	
+	?call(Port, ?EVENT_OPEN, [Type, Name, 0]).
+
+get_country_by_ip(Port, IP) when is_binary(IP) ->
+	?call(Port, ?EVENT_COUNTRY_BY_IP, <<IP/binary, 0>>);
 get_country_by_ip(Port, IP) ->
-	?call(Port,[?EVENT_COUNTRY_BY_IP, IP, 0]).
+	?call(Port, ?EVENT_COUNTRY_BY_IP, [IP, 0]).
 
+%% tell driver to return string instead of binary, this is the default option
+use_string(Port) ->
+	?call(Port, ?EVENT_USE_STRING, <<>>).
+	
+%% tell driver to return binary instead of string	
+use_binary(Port) ->
+	?call(Port, ?EVENT_USE_BINARY, <<>>).
 	
 %%
 %% test and benchmark code...
 %%
 
--define(GEOIP_DATABASE, (<<"GeoIP.dat">>)).
 	
-test() ->
-	test(?GEOIP_STANDARD),
-	test(?GEOIP_MEMORY_CACHE),
-	test(?GEOIP_CHECK_CACHE),
-	test(?GEOIP_MEMORY_CACHE bor ?GEOIP_CHECK_CACHE).
+ip_test() ->
+	ip_test_internal(?GEOIP_STANDARD),
+	ip_test_internal(?GEOIP_MEMORY_CACHE),
+	ip_test_internal(?GEOIP_CHECK_CACHE),
+	ip_test_internal(?GEOIP_MEMORY_CACHE bor ?GEOIP_CHECK_CACHE).
 	
-test(Type) ->
-	erl_ddll:load(".", ?MODULE),
+ip_test_internal(Type) ->
+	erl_ddll:load(?DRIVER_LOCATION, ?MODULE),
 	Port = open_port({spawn, ?MODULE},[binary]),
+    link(Port),
 	open(Port, ?GEOIP_DATABASE, Type),
-	[io:format("Type: ~p ~s~n", [Type, get_country_by_ip(Port, IP)]) || IP <- test_ip()],
-	io:format("~n"),
+	[?assertEqual(Country,get_country_by_ip(Port, IP)) || {IP, Country} <- ip_input()],
+	[?assertEqual(Country,get_country_by_ip(Port, IP)) || {IP, Country} <- ip_input2()],
+	use_binary(Port), % switch to binary return mode
+	[?assertEqual(Country,get_country_by_ip(Port, IP)) || {IP, Country} <- ip_input3()],
+	[?assertEqual(Country,get_country_by_ip(Port, IP)) || {IP, Country} <- ip_input4()],
 	port_close(Port),
 	erl_ddll:unload(?MODULE).
 
-test_ip() ->
-	[<<"24.24.24.24">>,<<"80.24.24.80">>,
-	 <<"200.24.24.40">>,<<"68.24.24.46">>].
+ip_input() ->
+	[ %% {Input, Output} pairs
+     {"24.24.24.24",  "United States"},
+     {"80.24.24.80",  "Spain"},
+	 {"200.24.24.40", "Colombia"},
+     {"68.24.24.46",  "United States"}
+    ].
 
-	 
+ip_input2() ->
+	[ %% {Input, Output} pairs
+     {<<"24.24.24.24">>,  "United States"},
+     {<<"80.24.24.80">>,  "Spain"},
+	 {<<"200.24.24.40">>, "Colombia"},
+     {<<"68.24.24.46">>,  "United States"}
+    ].
+	
+ip_input3() ->
+	[ %% {Input, Output} pairs
+     {"24.24.24.24",  <<"United States">>},
+     {"80.24.24.80",  <<"Spain">>},
+	 {"200.24.24.40", <<"Colombia">>},
+     {"68.24.24.46",  <<"United States">>}
+    ].
+ip_input4() ->
+	[ %% {Input, Output} pairs
+     {<<"24.24.24.24">>,  <<"United States">>},
+     {<<"80.24.24.80">>,  <<"Spain">>},
+	 {<<"200.24.24.40">>, <<"Colombia">>},
+     {<<"68.24.24.46">>,  <<"United States">>}
+    ].
+	
 -define(BENCHMARK(TYPE, N), 
 begin
 	print_benchmark(??TYPE, N,
-					 element(1, timer:tc(?MODULE, benchmark, [{type, TYPE, N}])),
-					 element(1, timer:tc(?MODULE, benchmark_overhead, [{TYPE, N}])))
+					 element(1, timer:tc(?MODULE, benchmark, [{type, TYPE, N}])))
 end).
  
 benchmark() ->
@@ -135,18 +215,16 @@ benchmark() ->
 	?BENCHMARK(?GEOIP_MEMORY_CACHE, 1000000),
 	?BENCHMARK(?GEOIP_MEMORY_CACHE bor ?GEOIP_CHECK_CACHE, 1000000).
 
-print_benchmark(Type, N, Res, Overhead) ->
-	io:format("Result for ~p: (~p ms) (overhead: ~p ms) (C-only: ~p ms) x~p~n", 
+print_benchmark(Type, N, Res) ->
+	io:format("~p lookups for ~p: (~p ms) ~n", 
 			 [
+				N,
 				Type, 
-				Res div 1000,
-				Overhead  div 1000,
-				(Res - Overhead)  div 1000,
-				N
+				Res div 1000
 			 ]).	
 
 benchmark_overhead({Type, N}) ->
-	erl_ddll:load(".", ?MODULE),
+	erl_ddll:load(?DRIVER_LOCATION, ?MODULE),
 	Port = open_port({spawn, ?MODULE},[binary]),
 	open(Port,  ?GEOIP_DATABASE, Type),
 	benchmark_overhead(Port, N),
@@ -154,7 +232,8 @@ benchmark_overhead({Type, N}) ->
 	erl_ddll:unload(?MODULE).	
 	
 benchmark_overhead(Port, N) ->
-	benchmark_overhead(Port, N, test_ip(), []).
+    IPs = lists:map(fun({IP,_}) -> IP end, ip_input()), 
+	benchmark_overhead(Port, N, IPs, []).
 
 benchmark_overhead(_, 0, _, _) -> ok;
 
@@ -162,12 +241,12 @@ benchmark_overhead(Port, N, [], IP ) ->
 	benchmark_overhead(Port, N, IP, []);
 	
 benchmark_overhead(Port, N, [IP|T], IPList ) ->
-	catch ?call(Port,[3, IP, 0]),
+	catch ?call(Port,1010101, <<IP, 0>>),
 	benchmark_overhead(Port, N-1, T, [IP|IPList]).
 	
 	
 benchmark({type, Type, N}) ->
-	erl_ddll:load(".", ?MODULE),
+	erl_ddll:load(?DRIVER_LOCATION, ?MODULE),
 	Port = open_port({spawn, ?MODULE},[binary]),
 	open(Port, ?GEOIP_DATABASE, Type),
 	benchmark(Port, N),
@@ -175,7 +254,8 @@ benchmark({type, Type, N}) ->
 	erl_ddll:unload(?MODULE).	
 	
 benchmark(Port, N) ->
-	benchmark(Port, N, test_ip(), []).
+    IPs = lists:map(fun({IP,_}) -> IP end, ip_input()),
+	benchmark(Port, N, IPs, []).
 
 benchmark(_, 0, _, _) -> ok;
 

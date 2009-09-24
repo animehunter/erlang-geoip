@@ -7,27 +7,58 @@ Makefiles for other platforms are welcomed :)
 download latest geoip (GeoIP.dat) country database at http://www.maxmind.com/app/geolitecountry
 
 %%
-%% Usage:
+%% Basic Usage:
 %%
 %% > Geoip = geoip:new("GeoIP.dat").
 %% #Port<0.2755>
 %%
 %% > geoip:get_country_by_ip(Geoip, "24.24.24.24").
-%% <<"United States">>
+%% "United States"
 %%
 %% > geoip:get_country_by_ip(Geoip, <<"80.24.24.80">>).
-%% <<"Spain">>
+%% "Spain"
+%%
+%% > geoip:delete(Geoip).
+%% ok
+%%
+
+%%
+%% Advanced usage:
+%%
+%% > Geoip = geoip:new("GeoIP.dat").
+%% #Port<0.2755>
+%%
+%% > geoip:use_binary(Geoip).
+%% []
+%%
+%% > geoip:get_country_by_ip(Geoip, "24.24.24.24").
+%% <<"United States">>
+%%
+%% > geoip:get_country_by_ip(Geoip, "invalidip").
+%% []
+%%
+%% > geoip:use_string(Geoip).                      
+%% []
+%%
+%% > geoip:get_country_by_ip(Geoip, "24.24.24.24").
+%% "United States"
+%%
+%% > geoip:get_country_by_ip(Geoip, "invalidip").
+%% []
+%%
+%% > geoip:delete(Geoip).
+%% ok
 %%
 
 %%
 %% Erlang benchmark
 %%
 %% > geoip:benchmark().
-%% (Slow) Result for "? GEOIP_STANDARD": (2578 ms) (overhead: 61 ms) (C-only: 2516 ms) x100000
-%% (Slow) Result for "? GEOIP_CHECK_CACHE": (2390 ms) (overhead: 30 ms) (C-only: 2360 ms) x100000
-%% (Fast) Result for "? GEOIP_MEMORY_CACHE": (1188 ms) (overhead: 390 ms) (C-only: 797 ms) x1000000
-%% (Fast) Result for "? GEOIP_MEMORY_CACHE bor ? GEOIP_CHECK_CACHE": (1203 ms) (overhead: 390 ms) (C-only: 812 ms) x1000000
-%%
+%% 100000 lookups for "? GEOIP_STANDARD": (2556 ms) 
+%% 100000 lookups for "? GEOIP_CHECK_CACHE": (2435 ms) 
+%% 1000000 lookups for "? GEOIP_MEMORY_CACHE": (890 ms) 
+%% 1000000 lookups for "? GEOIP_MEMORY_CACHE bor ? GEOIP_CHECK_CACHE": (903 ms) 
+%% 
 
 %%
 %% C Benchmark
@@ -46,5 +77,4 @@ download latest geoip (GeoIP.dat) country database at http://www.maxmind.com/app
 %% GeoIP Country with GEOIP_MEMORY_CACHE and GEOIP_CHECK_CACHE
 %% 1200000 lookups made in 0.414053 seconds
 %%
-
 
